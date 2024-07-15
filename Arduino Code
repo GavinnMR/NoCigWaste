@@ -1,3 +1,5 @@
+//Download this library first: https://github.com/AndreaLombardo/L298N#readme
+
 #include <L298N.h>            //include a custom made library to be used for the motor module
 
 const unsigned int IN1 = 7;   //pin for forwarding motor AB
