@@ -1,0 +1,100 @@
+#include <L298N.h>            //include a custom made library to be used for the motor module
+
+const unsigned int IN1 = 7;   //pin for forwarding motor AB
+const unsigned int IN2 = 8;   //pin for backwarding motor AB
+const unsigned int ENA = 9;   //pin for changing motor AB speed
+const unsigned int IN3 = 13;  //pin for forwarding motor CD
+const unsigned int IN4 = 12;  //pin for backwarding motor CD
+const unsigned int ENB = 11;  //pin for changing motor CD speed
+int sensorPin = A0;           //pin for the MQ-2 sensor
+int sensorValue;              //declares the sensor readings as a variable
+int relayPin = 2;             //pin for controlling the relay of the water pump
+
+//Create two motor instances
+L298N motorAB(ENA, IN1, IN2);
+L298N motorCD(ENB, IN3, IN4);
+
+/*
+Referential Value: the program will record the sensor reading every 500 milliseconds, 
+then compare it to the current sensor reading. If the difference between the two
+surpasses 7—meaning the sensor has detected smoke—the extinguishing mechanism wil activate.
+*/
+int sensorRef;                //declares the sensor reference as a variable
+int timePeriod = 500;         //interval between every referential value; is also the delay between smoke detection and extinguishing activation
+int sensorLimit = 7;          //threshold to be surpassed for the extinguishing mechanism to be activated
+unsigned long previousTime;   //stacks the amount of seconds passed
+unsigned long currentTime = 0;//starts at 0
+
+void setup ()
+{
+  Serial.begin(9600);
+
+  //MOTOR
+  motorAB.setSpeed(255);    //motorAB at max speed
+  motorCD.setSpeed(255);    //motorCD at max speed
+
+  //WATER PUMP
+  pinMode(relayPin, OUTPUT);//to activate the relay, there must be voltage (5v) flowing to it, and vice versa for turning it off
+
+  //SENSOR
+  Serial.println("MQ2 warming up!");
+  delay(20000);             //allows the MQ2 to warm up to avoid overheating
+
+  //REFERENTIAL VALUE
+  sensorRef = sensorValue;
+}
+
+void loop ()
+{
+  //SENSOR
+  sensorValue = analogRead(sensorPin);  //reads the sensorPin as sensorValue
+  Serial.print("Sensor Reading: ");
+  Serial.println(sensorValue);
+  delay(1000);                          //reads every 1000 milliseconds
+
+  //Referential Value
+  sensorRef = sensorValue; 
+  currentTime = millis();               //millis() counts the number of seconds that has passed after activating the program
+
+  /*
+  previousTime is 0, whereas currentTime is counting upwards and is surely above 1000.
+  timePeriod is set as 500, thereby activating the function stated inside the if statement.
+  what the function does is it updates the sensorRef(Referential Value) every 500 milliseconds.
+  */
+  if (currentTime - previousTime > timePeriod) {
+    sensorRef = analogRead(sensorPin);
+    previousTime = currentTime;
+  }
+
+  /*
+  if the sensorRef (which was recorded 0.5 seconds ago) is bigger than the current reading + sensorLimit (meaning, a spike in readings has occured),
+  then the program will activate the functions inside. a while statement is made so that the program does not have to go over the entire
+  loop() function which, if it happens, will just delay the responsiveness of the bin if multiple cigarettes have been thrown consecutively.
+  */
+  if (sensorRef > sensorValue + sensorLimit) {
+    while (sensorRef > sensorValue + sensorLimit) {
+      sensorValue = analogRead(sensorPin);
+      WaterPump();                          //pumps water from the reservoir to the funnel for 1 second
+      Motors();                             //runs the motors for 8 seconds
+      Serial.println("Sensor Reading: ");
+      Serial.println(sensorValue);
+
+    }
+  }
+}
+
+  void WaterPump()
+  {
+    digitalWrite(relayPin, HIGH);           //water pump is activated by the relay
+    delay(1000);                            //the instance of the activation is paused for 1 second, thereby pumping water for 1 second too
+    digitalWrite(relayPin, LOW);            //the relay turns of the water pump
+  }
+
+  void Motors() 
+  {
+    motorAB.backward();                     //signals motorAB to run backward
+    motorCD.forward();                      //signals motorCD to run forward
+    delay(8000);                            //pauses the 'run' instances for 8 seconds, thereby running the motors for 8 seconds too
+    motorAB.stop();                         //stops motorAB
+    motorCD.stop();                         //stops motorCD
+  }
